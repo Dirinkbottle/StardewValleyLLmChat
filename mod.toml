@@ -1,0 +1,58 @@
+# NPC LLM Agent 全局配置
+# 这里只放 URL、Token、模型等文本配置；游戏内菜单只做 NPC 级开关与时间段。
+
+[router]
+default_timeout_seconds = 10
+max_retry_count = 2
+tool_loop_max_rounds = 4
+retry_backoff_milliseconds = 1500
+enable_verbose_debug = true
+
+[embeddings]
+provider_name = "embedding"
+
+[debug]
+save_request_summary = true
+save_response_summary = true
+save_tool_calls = true
+save_patch_diff = true
+save_embedding_hits = true
+
+[perception]
+npc_radius_tiles = 100
+
+[broadcast]
+max_hops = 5
+
+[providers.deepseek]
+kind = "openai"
+base_url = "https://api.deepseek.com/v1"
+api_key = "PUT_YOUR_TOKEN_HERE"
+model = "deepseek-chat"
+max_tokens = 1536
+thinking_enabled = false
+temperature = 0.7
+tool_calling_required = true
+timeout_seconds = 10
+
+[providers.embedding]
+kind = "openai"
+base_url = "https://api.siliconflow.cn/v1"
+api_key = "PUT_YOUR_TOKEN_HERE"
+model = "BAAI/bge-large-zh-v1.5"
+max_tokens = 1536
+thinking_enabled = false
+temperature = 0.7
+tool_calling_required = true
+timeout_seconds = 10
+
+[providers.anthropic_default]
+kind = "anthropic"
+base_url = "https://api.anthropic.com/v1"
+api_key = "PUT_YOUR_TOKEN_HERE"
+model = "claude-3-7-sonnet-latest"
+max_tokens = 1536
+thinking_enabled = false
+temperature = 0.7
+tool_calling_required = true
+timeout_seconds = 45

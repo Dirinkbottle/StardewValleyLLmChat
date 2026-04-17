@@ -1,0 +1,10 @@
+{
+  "Name": "StardewMod",
+  "Author": "Dirinkbottle",
+  "Version": "1.0.0",
+  "Description": "提供 NPC 路线编辑、NPC LLM 和全局菜单界面倍率的 Stardew Valley 模组。",
+  "UniqueID": "Dirinkbottle.AutoFishingMod",
+  "EntryDll": "StardewMod.dll",
+  "MinimumApiVersion": "4.0.0",
+  "UpdateKeys": []
+}
