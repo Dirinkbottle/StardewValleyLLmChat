@@ -1,0 +1,153 @@
+name: Build And Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      game_path:
+        description: Optional override for the Stardew Valley install path on the runner
+        required: false
+        type: string
+      tag_name:
+        description: Optional release tag, defaults to v<manifest version>
+        required: false
+        type: string
+      release_name:
+        description: Optional release name, defaults to <manifest name> <manifest version>
+        required: false
+        type: string
+      prerelease:
+        description: Mark the GitHub Release as a prerelease
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-release-master
+  cancel-in-progress: false
+
+jobs:
+  build-release:
+    # This project uses Pathoschild.Stardew.ModBuildConfig, so the runner must
+    # have Stardew Valley and SMAPI installed locally to provide game references.
+    runs-on:
+      - self-hosted
+      - windows
+
+    env:
+      DOTNET_NOLOGO: true
+      NUGET_PACKAGES: ${{ github.workspace }}\.nuget\packages
+
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@v4
+        with:
+          ref: refs/heads/master
+          fetch-depth: 0
+
+      - name: Setup .NET 6 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 6.0.x
+          cache: true
+          cache-dependency-path: StardewMod.csproj
+
+      - name: Resolve game path
+        id: resolve_game_path
+        shell: pwsh
+        run: |
+          $gamePath = "${{ inputs.game_path }}"
+          if ([string]::IsNullOrWhiteSpace($gamePath)) {
+            $gamePath = "${{ vars.STARDEW_GAME_PATH }}"
+          }
+
+          if ([string]::IsNullOrWhiteSpace($gamePath)) {
+            throw "Missing game path. Set the workflow input 'game_path' or repository variable 'STARDEW_GAME_PATH'."
+          }
+
+          $gameDll = Join-Path $gamePath "Stardew Valley.dll"
+          $smapiDll = Join-Path $gamePath "StardewModdingAPI.dll"
+
+          if (-not (Test-Path $gameDll)) {
+            throw "Stardew Valley.dll not found under '$gamePath'."
+          }
+
+          if (-not (Test-Path $smapiDll)) {
+            throw "StardewModdingAPI.dll not found under '$gamePath'. Install SMAPI into the game folder on this runner first."
+          }
+
+          "GAME_PATH=$gamePath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Restore NuGet packages
+        shell: pwsh
+        run: dotnet restore StardewMod.sln
+
+      - name: Build release package
+        shell: pwsh
+        run: |
+          dotnet build StardewMod.sln `
+            -c Release `
+            -p:ContinuousIntegrationBuild=true `
+            -p:GamePath="$env:GAME_PATH" `
+            -p:EnableModDeploy=false `
+            -p:BundleExtraAssemblies=ThirdParty
+
+      - name: Resolve release metadata
+        id: meta
+        shell: pwsh
+        run: |
+          $manifest = Get-Content ./manifest.json -Raw | ConvertFrom-Json
+          $version = [string]$manifest.Version
+          $name = [string]$manifest.Name
+
+          $tag = "${{ inputs.tag_name }}"
+          if ([string]::IsNullOrWhiteSpace($tag)) {
+            $tag = "v$version"
+          }
+
+          $releaseName = "${{ inputs.release_name }}"
+          if ([string]::IsNullOrWhiteSpace($releaseName)) {
+            $releaseName = "$name $version"
+          }
+
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "release_name=$releaseName" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Collect release artifacts
+        id: artifacts
+        shell: pwsh
+        run: |
+          $artifactDir = Join-Path $env:RUNNER_TEMP "release-artifacts"
+          New-Item -ItemType Directory -Force -Path $artifactDir | Out-Null
+
+          $zipFiles = Get-ChildItem -Path "./bin/Release/net6.0" -Filter "*.zip" -File
+          if (-not $zipFiles -or $zipFiles.Count -eq 0) {
+            throw "No release zip was produced under bin/Release/net6.0."
+          }
+
+          foreach ($file in $zipFiles) {
+            Copy-Item $file.FullName -Destination (Join-Path $artifactDir $file.Name) -Force
+          }
+
+          "artifact_dir=$artifactDir" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Upload workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: StardewMod-${{ steps.meta.outputs.version }}
+          path: ${{ steps.artifacts.outputs.artifact_dir }}/*.zip
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          target_commitish: master
+          name: ${{ steps.meta.outputs.release_name }}
+          prerelease: ${{ inputs.prerelease }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: ${{ steps.artifacts.outputs.artifact_dir }}/*.zip
