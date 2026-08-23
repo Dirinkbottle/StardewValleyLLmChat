@@ -170,6 +170,29 @@ public sealed class NpcAgentWorkQueues
         return RebuildQueue(this.pendingEvents, predicate);
     }
 
+    public bool TryRemoveLastPendingEvent(Func<NpcAgentEvent, bool> predicate, out NpcAgentEvent? removedEvent)
+    {
+        List<NpcAgentEvent> items = this.pendingEvents.ToList();
+        int removeIndex = items.FindLastIndex(item => predicate(item));
+        if (removeIndex < 0)
+        {
+            removedEvent = null;
+            return false;
+        }
+
+        removedEvent = items[removeIndex];
+        this.pendingEvents.Clear();
+        for (int i = 0; i < items.Count; i++)
+        {
+            if (i != removeIndex)
+            {
+                this.pendingEvents.Enqueue(items[i]);
+            }
+        }
+
+        return true;
+    }
+
     public void TrimPendingEventsTo(int maxCount)
     {
         while (this.pendingEvents.Count > maxCount)

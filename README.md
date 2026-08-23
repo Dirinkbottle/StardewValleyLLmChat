@@ -23,6 +23,8 @@
 - 配置每周时间窗和轮询周期。
 - 控制是否允许移动行为、玩家对话、未来日程修改。
 - 记录 NPC 记忆、事件、调试摘要和向量缓存。
+- 玩家聊天框提供话题灵感，并显示 NPC 当前是否正在思考。
+- 模型漏掉对白工具调用时，会把安全的纯文本结果兜底显示为游戏内对白。
 
 ## 安装
 
@@ -205,6 +207,8 @@ Stardew Valley/
 - 更高优先级事件可以中断正在执行的请求，并把被打断的旧事件重新插回队头，等待后续重放。
 
 所以这不是单队列 FIFO，而是“带去重、替换、抢占和回放”的本地事件调度器。
+
+为避免慢模型或连续广播把某个 NPC 的队列无限堆高，每个 NPC 最多保留 16 个待处理事件。超过上限时会优先从队尾淘汰 `periodic_tick`、环境观察和广播等低优先级后台事件；最新玩家输入、送礼和 NPC 同步事件拥有更高优先级。请求完成时，本地还会在清理 `ActiveRequest` 前提交该请求剩余的即时反馈，避免对白或表情刚好在两帧之间生成时被误判成过期事件。
 
 ### 2. 内置小型 Agent
 
@@ -454,6 +458,32 @@ dotnet build StardewMod.sln -c Release -p:GamePath="D:\\SteamLibrary\\steamapps\
 dotnet build StardewMod.sln -c Debug -p:GamePath="/mnt/d/SteamLibrary/steamapps/common/Stardew Valley"
 ```
 
+### Linux 一键构建
+
+仓库提供了会自动探测常见 Steam、Flatpak Steam 与 GOG 路径的脚本：
+
+```bash
+./scripts/build-linux.sh
+```
+
+如果游戏不在默认位置，显式传入包含 `Stardew Valley.dll` 和 `StardewModdingAPI.dll` 的目录：
+
+```bash
+./scripts/build-linux.sh --game-path "/mnt/games/SteamLibrary/steamapps/common/Stardew Valley"
+```
+
+关键参数：
+
+- `--game-path PATH`：指定已安装 Stardew Valley 与 SMAPI 的目录。
+- `--configuration Debug|Release`：选择构建配置，默认 `Release`。
+- `--output PATH`：指定校验后的 zip 输出目录，默认 `artifacts/linux/`。
+
+脚本会执行 restore、关闭自动部署、生成发布 zip，并调用 `scripts/verify-mod-package.py` 检查 zip 的 CRC、路径安全性、Linux 大小写冲突、manifest 身份、DLL、配置文件和聊天气泡资源。
+
+### Linux CI
+
+`.github/workflows/linux-build.yml` 会在 `master` push、PR 和手动触发时构建并上传 Linux-ready zip。由于 SMAPI 的构建包需要合法安装的游戏与 SMAPI 程序集，工作流使用 `self-hosted + linux` runner；请在 runner 上安装游戏和 SMAPI，并将仓库变量 `STARDEW_GAME_PATH` 指向游戏目录。手动触发时也可以用 `game_path` 输入临时覆盖。
+
 ### 构建产物
 
 常见输出位置：
@@ -474,6 +504,7 @@ dotnet build StardewMod.sln -c Debug -p:GamePath="/mnt/d/SteamLibrary/steamapps/
 ├── Models/
 ├── Services/
 ├── Ui/
+├── scripts/
 ├── docs/
 ├── manifest.json
 ├── mod.toml

@@ -8,6 +8,8 @@ namespace StardewMod.Services;
 
 internal sealed partial class NpcAgentManager
 {
+    private const int MaxPendingEventsPerNpc = 16;
+
     private static bool IsNonInterruptingSystemEventType(string? eventType)
     {
         return string.Equals(eventType, "day_idle", StringComparison.OrdinalIgnoreCase) ||
@@ -25,7 +27,7 @@ internal sealed partial class NpcAgentManager
     {
         NpcAgentRuntimeState state = this.GetOrCreateState(npcName);
         bool isNonInterruptingSystemEvent = IsNonInterruptingSystemEventType(agentEvent.EventType);
-        bool effectiveInterruptInflight = interruptInflight && !isNonInterruptingSystemEvent;
+        bool effectiveInterruptInflight = (interruptInflight || IsForegroundEventType(agentEvent.EventType)) && !isNonInterruptingSystemEvent;
         NpcAgentEvent? replayEvent = null;
 
         if (isNonInterruptingSystemEvent &&
@@ -73,7 +75,70 @@ internal sealed partial class NpcAgentManager
         }
 
         state.Queues.EnqueuePendingEvent(agentEvent, prepend: effectiveInterruptInflight);
+        this.EnforcePendingEventLimit(npcName, state);
         this.logger.Info("Event", $"入队 event={agentEvent.EventType} pending={state.Queues.PendingEventCount}", npcName);
+    }
+
+    private static bool IsForegroundEventType(string? eventType)
+    {
+        return string.Equals(eventType, "player_prompt", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(eventType, "gift_received", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static int GetPendingEventPriority(NpcAgentEvent agentEvent)
+    {
+        if (string.Equals(agentEvent.EventType, "player_prompt", StringComparison.OrdinalIgnoreCase))
+        {
+            return 4;
+        }
+
+        if (string.Equals(agentEvent.EventType, "gift_received", StringComparison.OrdinalIgnoreCase))
+        {
+            return 3;
+        }
+
+        if (IsNpcSyncEventType(agentEvent.EventType))
+        {
+            return 2;
+        }
+
+        if (IsDayIdleEventType(agentEvent.EventType))
+        {
+            return 1;
+        }
+
+        return IsAmbientObservationEventType(agentEvent.EventType) || IsBroadcastEventType(agentEvent.EventType)
+            ? 0
+            : 1;
+    }
+
+    private void EnforcePendingEventLimit(string npcName, NpcAgentRuntimeState state)
+    {
+        while (state.Queues.PendingEventCount > MaxPendingEventsPerNpc)
+        {
+            List<NpcAgentEvent> queuedEvents = state.Queues.EnumeratePendingEvents().ToList();
+            if (queuedEvents.Count == 0)
+            {
+                return;
+            }
+
+            int lowestPriority = queuedEvents.Min(GetPendingEventPriority);
+            if (!state.Queues.TryRemoveLastPendingEvent(
+                    queuedEvent => GetPendingEventPriority(queuedEvent) == lowestPriority,
+                    out NpcAgentEvent? droppedEvent) ||
+                droppedEvent is null)
+            {
+                return;
+            }
+
+            state.DroppedPendingEventCount++;
+            state.LastDroppedEventType = droppedEvent.EventType;
+            state.PushDebugLine($"队列限流：丢弃 {droppedEvent.EventType}。");
+            this.logger.Warn(
+                "Event",
+                $"待处理事件超过上限 {MaxPendingEventsPerNpc}，丢弃低优先级事件 event={droppedEvent.EventType} priority={lowestPriority} dropped_total={state.DroppedPendingEventCount}",
+                npcName);
+        }
     }
 
     private void StartNextRequest(string npcName, NpcAgentRuntimeState state, NpcAgentSettings settings)
@@ -292,6 +357,7 @@ internal sealed partial class NpcAgentManager
         }
 
         NpcActiveRequestRuntime activeRequest = state.ActiveRequest;
+        this.FlushImmediateFeedbackForCompletedRequest(npcName, state, activeRequest);
         try
         {
             AgentRequestResult result = task.GetAwaiter().GetResult();
@@ -362,6 +428,29 @@ internal sealed partial class NpcAgentManager
             foreach (NpcActionRequest actionRequest in result.DeferredActionRequests)
             {
                 this.RouteCommittedActionRequest(npcName, state, actionRequest, fromImmediateFeedback: false);
+            }
+
+            if (string.Equals(result.Trigger, "player_prompt", StringComparison.OrdinalIgnoreCase) &&
+                !result.RequestedSpeech &&
+                state.Queues.PendingSpeechCount == 0 &&
+                TryBuildFallbackSpeech(result.ResponseSummary, out string fallbackMessage))
+            {
+                this.RouteCommittedActionRequest(
+                    npcName,
+                    state,
+                    new NpcActionRequest
+                    {
+                        Type = NpcActionRequestType.SpeakToPlayer,
+                        DispatchMode = NpcActionDispatchMode.ImmediateFeedback,
+                        Message = fallbackMessage,
+                        SourceToolName = "assistant_text_fallback",
+                        Reason = "模型返回了可显示的纯文本，但没有调用 npc_say_to_player。"
+                    },
+                    fromImmediateFeedback: false,
+                    sourceToolName: "assistant_text_fallback");
+                result.RequestedSpeech = true;
+                state.PushDebugLine("模型未调用对白工具，已把纯文本结果转成游戏内对白。");
+                this.logger.Info("Speech", "已将模型纯文本结果转成兜底对白。", npcName);
             }
 
             if (string.Equals(result.Trigger, "player_prompt", StringComparison.OrdinalIgnoreCase) &&

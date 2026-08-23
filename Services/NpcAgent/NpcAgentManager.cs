@@ -178,7 +178,7 @@ internal sealed partial class NpcAgentManager
         this.logger.Info("Lifecycle", $"ReturnedToTitle -> 清空 {this.states.Count} 个运行时状态。");
         foreach (NpcAgentRuntimeState state in this.states.Values)
         {
-            this.TryCancelActiveRequest(state, NpcRequestCancellationReason.ReturnedToTitle, "returned_to_title");
+            this.CancelAndDetachActiveRequestForTitle(state);
         }
 
         this.states.Clear();

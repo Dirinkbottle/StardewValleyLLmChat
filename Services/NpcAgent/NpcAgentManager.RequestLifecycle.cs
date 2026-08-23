@@ -49,6 +49,50 @@ internal sealed partial class NpcAgentManager
         state.ActiveRequest = null;
     }
 
+    private void CancelAndDetachActiveRequestForTitle(NpcAgentRuntimeState state)
+    {
+        state.AcceptingAsyncFeedback = false;
+        NpcActiveRequestRuntime? activeRequest = state.ActiveRequest;
+        if (activeRequest is null)
+        {
+            state.Queues.ClearAll();
+            return;
+        }
+
+        if (activeRequest.Phase != NpcRequestPhase.Cancelling)
+        {
+            activeRequest.Phase = NpcRequestPhase.Cancelling;
+            activeRequest.CancellationReason = NpcRequestCancellationReason.ReturnedToTitle;
+            activeRequest.CancellationDetail = "returned_to_title";
+            activeRequest.Cancellation?.Cancel();
+        }
+
+        CancellationTokenSource? cancellation = activeRequest.Cancellation;
+        Task<AgentRequestResult>? requestTask = activeRequest.Task;
+        state.ActiveRequest = null;
+        state.Queues.ClearAll();
+
+        if (requestTask is null)
+        {
+            cancellation?.Dispose();
+            return;
+        }
+
+        _ = requestTask.ContinueWith(
+            completedTask =>
+            {
+                if (completedTask.IsFaulted)
+                {
+                    _ = completedTask.Exception;
+                }
+
+                cancellation?.Dispose();
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+    }
+
     private void QueueRuntimeReset(NpcAgentRuntimeState state, bool restoreBaseline, bool logChange, string reason)
     {
         if (state.PendingRuntimeReset is null)

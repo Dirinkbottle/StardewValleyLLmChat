@@ -227,6 +227,10 @@ public sealed class NpcConversationRuntimeSnapshot
 
     public int PendingDeferredActionCount { get; set; }
 
+    public int DroppedPendingEventCount { get; set; }
+
+    public string LastDroppedEventType { get; set; } = string.Empty;
+
     public string ActiveActionSummary { get; set; } = string.Empty;
 
     public bool HasActiveChatBubble { get; set; }
@@ -257,11 +261,18 @@ public sealed class NpcAgentRuntimeState
 
     public NpcAgentWorkQueues Queues { get; } = new();
 
+    public int DroppedPendingEventCount { get; set; }
+
+    public string LastDroppedEventType { get; set; } = string.Empty;
+
     [JsonIgnore]
     public NpcActiveRequestRuntime? ActiveRequest { get; set; }
 
     [JsonIgnore]
     public NpcQueuedRuntimeReset? PendingRuntimeReset { get; set; }
+
+    [JsonIgnore]
+    public bool AcceptingAsyncFeedback { get; set; } = true;
 
     public string IdleStatusOverride { get; set; } = string.Empty;
 

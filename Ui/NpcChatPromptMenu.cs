@@ -13,16 +13,26 @@ namespace StardewMod.Ui;
 internal sealed class NpcChatPromptMenu : IClickableMenu, IModMenu
 {
     private const int PreferredPanelWidth = 900;
-    private const int PreferredPanelHeight = 252;
+    private const int PreferredPanelHeight = 340;
     private const int MinPanelWidth = 560;
-    private const int MinPanelHeight = 220;
+    private const int MinPanelHeight = 300;
     private const int AbsoluteMinWidth = 420;
-    private const int AbsoluteMinHeight = 200;
+    private const int AbsoluteMinHeight = 260;
+    private const string DescriptionText = "发送后输入框会关闭；NPC 可以结合记忆、附近角色和当天行程回答。正在处理旧消息时，新消息会自动优先排队。";
+    private static readonly string[] SuggestedPrompts =
+    {
+        "今天发生了什么让你印象最深？",
+        "你最近还记得我们之间哪些有趣的事？",
+        "看看附近的人，你现在最想和谁聊两句？",
+        "如果今天的行程可以小改一下，你最想去哪里？"
+    };
     private readonly NpcAgentManager agentManager;
     private readonly NPC npc;
     private readonly MenuActionButton cancelButton = new("取消", "关闭输入框，不发送。");
+    private readonly MenuActionButton inspirationButton = new("来点灵感", "填入一条可继续修改的话题。");
     private readonly MenuActionButton sendButton;
     private readonly TextBox inputBox;
+    private int suggestedPromptIndex = -1;
 
     public NpcChatPromptMenu(NpcAgentManager agentManager, NPC npc)
         : base(0, 0, PreferredPanelWidth, PreferredPanelHeight, showUpperRightCloseButton: false)
@@ -65,6 +75,12 @@ internal sealed class NpcChatPromptMenu : IClickableMenu, IModMenu
             return;
         }
 
+        if (this.inspirationButton.Contains(x, y))
+        {
+            this.FillSuggestedPrompt();
+            return;
+        }
+
         if (new Rectangle(this.inputBox.X, this.inputBox.Y, this.inputBox.Width, this.inputBox.Height).Contains(x, y))
         {
             this.inputBox.SelectMe();
@@ -87,6 +103,13 @@ internal sealed class NpcChatPromptMenu : IClickableMenu, IModMenu
         base.receiveKeyPress(key);
     }
 
+    public override void cleanupBeforeExit()
+    {
+        this.inputBox.Selected = false;
+        this.inputBox.OnEnterPressed -= this.OnEnterPressed;
+        base.cleanupBeforeExit();
+    }
+
     public override void draw(SpriteBatch b)
     {
         b.Draw(Game1.fadeToBlackRect, Game1.graphics.GraphicsDevice.Viewport.Bounds, Color.Black * 0.18f);
@@ -101,13 +124,33 @@ internal sealed class NpcChatPromptMenu : IClickableMenu, IModMenu
         MenuDrawHelper.DrawWrappedText(
             b,
             Game1.smallFont,
-            "发送后会立刻关闭输入框，NPC 会先原地等待，再通过原版对话框回话。控制台可用 npc_llm_prompt / npc_llm_state / npc_llm_schedule 调试。",
+            DescriptionText,
             descPos,
             new Color(80, 90, 110),
             this.width - 72);
 
         this.inputBox.Draw(b);
+        var runtime = this.agentManager.GetRuntimeSummary(this.npc.Name);
+        string queueHint = runtime.ConversationState.WaitingForPlayerResponse ||
+            runtime.InflightStatus.StartsWith("running:", StringComparison.OrdinalIgnoreCase) ||
+            runtime.InflightStatus.StartsWith("cancelling:", StringComparison.OrdinalIgnoreCase)
+            ? $"{this.npc.displayName} 正在思考；发送后会优先处理这条新消息。"
+            : $"{this.npc.displayName} 现在有空，可以直接聊。";
+        int queueHintWidth = this.width - 72;
+        int queueHintY = this.inputBox.Y + this.inputBox.Height + 10;
+        int queueHintHeight = MenuDrawHelper.MeasureWrappedHeight(Game1.smallFont, queueHint, queueHintWidth);
+        if (queueHintY + queueHintHeight <= this.cancelButton.Bounds.Y - 6)
+        {
+            MenuDrawHelper.DrawWrappedText(
+                b,
+                Game1.smallFont,
+                queueHint,
+                new Vector2(this.xPositionOnScreen + 36, queueHintY),
+                new Color(109, 92, 74),
+                queueHintWidth);
+        }
         MenuDrawHelper.DrawCard(b, this.cancelButton);
+        MenuDrawHelper.DrawCard(b, this.inspirationButton);
         MenuDrawHelper.DrawCard(b, this.sendButton, accent: true);
         this.drawMouse(b);
     }
@@ -131,6 +174,14 @@ internal sealed class NpcChatPromptMenu : IClickableMenu, IModMenu
         Game1.exitActiveMenu();
     }
 
+    private void FillSuggestedPrompt()
+    {
+        this.suggestedPromptIndex = (this.suggestedPromptIndex + 1) % SuggestedPrompts.Length;
+        this.inputBox.Text = SuggestedPrompts[this.suggestedPromptIndex];
+        this.inputBox.SelectMe();
+        Game1.playSound("smallSelect");
+    }
+
     private void Recenter()
     {
         ModMenuLayoutState.ResizeBottomAnchored(
@@ -146,13 +197,16 @@ internal sealed class NpcChatPromptMenu : IClickableMenu, IModMenu
 
     private void Relayout()
     {
+        int descriptionHeight = MenuDrawHelper.MeasureWrappedHeight(Game1.smallFont, DescriptionText, this.width - 72);
         this.inputBox.X = this.xPositionOnScreen + 36;
-        this.inputBox.Y = this.yPositionOnScreen + 118;
+        this.inputBox.Y = this.yPositionOnScreen + 52 + descriptionHeight + 16;
         this.inputBox.Width = this.width - 72;
         this.inputBox.Height = 52;
 
-        int buttonWidth = (this.width - 84) / 2;
+        int buttonGap = 10;
+        int buttonWidth = Math.Max(80, (this.width - 72 - buttonGap * 2) / 3);
         this.cancelButton.SetBounds(new Rectangle(this.xPositionOnScreen + 36, this.yPositionOnScreen + this.height - 62, buttonWidth, 44));
-        this.sendButton.SetBounds(new Rectangle(this.xPositionOnScreen + 48 + buttonWidth, this.yPositionOnScreen + this.height - 62, buttonWidth, 44));
+        this.inspirationButton.SetBounds(new Rectangle(this.cancelButton.Bounds.Right + buttonGap, this.cancelButton.Bounds.Y, buttonWidth, 44));
+        this.sendButton.SetBounds(new Rectangle(this.inspirationButton.Bounds.Right + buttonGap, this.cancelButton.Bounds.Y, buttonWidth, 44));
     }
 }

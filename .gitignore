@@ -1,7 +1,6 @@
-.gitnexus
-.claude
 .vs
 StardewVallySource/*
 obj/*
 bin/*
+artifacts/*
 StardewVallySource

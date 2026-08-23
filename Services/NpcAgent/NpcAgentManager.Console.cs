@@ -18,7 +18,7 @@ internal sealed partial class NpcAgentManager
         lines.Add($"npc={npcName}");
         lines.Add($"enabled={settings.Enabled} provider={settings.ProviderName} within_window={state.IsWithinActiveWindow} today_windows={this.GetTodayWindowSummary(settings)}");
         lines.Add($"inflight={state.InflightStatus} waiting_player_response={state.WaitingForPlayerResponse} awaiting_dialogue_close={state.AwaitingConversationDialogueClose} periodic_pause={state.PausePeriodicUntilConversationSettles}");
-        lines.Add($"pending_events={state.Queues.PendingEventCount} speech_display_queue={state.Queues.PendingSpeechCount} immediate_feedback_events={state.Queues.PendingImmediateFeedbackCount} realtime_actions={state.Queues.PendingRealtimeActionCount} deferred_actions={state.Queues.PendingDeferredActionCount}");
+        lines.Add($"pending_events={state.Queues.PendingEventCount} speech_display_queue={state.Queues.PendingSpeechCount} immediate_feedback_events={state.Queues.PendingImmediateFeedbackCount} realtime_actions={state.Queues.PendingRealtimeActionCount} deferred_actions={state.Queues.PendingDeferredActionCount} dropped_events={state.DroppedPendingEventCount} last_dropped={state.LastDroppedEventType}");
         lines.Add($"baseline_rule={state.BaselineScheduleKey} active_patch={(state.ActivePatch?.RevisionId ?? "<none>")} last_trigger={state.LastTrigger} last_duration={state.LastRequestDuration}");
 
         if (npc is not null)

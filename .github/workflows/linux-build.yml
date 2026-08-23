@@ -1,0 +1,57 @@
+name: Linux Build
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      game_path:
+        description: Optional Stardew Valley path on the self-hosted Linux runner
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-linux-mod:
+    # The official SMAPI build package needs the legally installed game and
+    # SMAPI assemblies, so this job intentionally uses a Linux self-hosted runner.
+    runs-on:
+      - self-hosted
+      - linux
+    timeout-minutes: 30
+
+    env:
+      CI: true
+      DOTNET_NOLOGO: true
+      NUGET_PACKAGES: ${{ runner.temp }}/nuget-packages
+      STARDEW_GAME_PATH: ${{ inputs.game_path || vars.STARDEW_GAME_PATH }}
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 6 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 6.0.x
+          cache: true
+          cache-dependency-path: StardewMod.csproj
+
+      - name: Build and verify Linux package
+        shell: bash
+        run: ./scripts/build-linux.sh
+
+      - name: Upload Linux-ready mod
+        uses: actions/upload-artifact@v4
+        with:
+          name: StardewValleyLLmChat-linux-${{ github.sha }}
+          path: artifacts/linux/*.zip
+          if-no-files-found: error
