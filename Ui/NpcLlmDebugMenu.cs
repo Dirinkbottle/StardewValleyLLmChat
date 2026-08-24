@@ -110,6 +110,7 @@ internal sealed class NpcLlmDebugMenu : IClickableMenu, IModMenu
             $"Inflight：{runtime.InflightStatus}",
             $"最近触发：{runtime.LastTrigger}",
             $"最近耗时：{runtime.LastRequestDuration}",
+            $"调度队列：待处理 {runtime.ConversationState.PendingEventCount}，累计限流丢弃 {runtime.ConversationState.DroppedPendingEventCount}，最近丢弃 {(string.IsNullOrWhiteSpace(runtime.ConversationState.LastDroppedEventType) ? "无" : runtime.ConversationState.LastDroppedEventType)}",
             $"最近 Patch 摘要：{(string.IsNullOrWhiteSpace(runtime.LastPatchSummary) ? "无" : runtime.LastPatchSummary)}",
             $"最近拒绝：{(string.IsNullOrWhiteSpace(runtime.LastRejectionReason) ? "无" : runtime.LastRejectionReason)}",
             "最近 tool 调用：",

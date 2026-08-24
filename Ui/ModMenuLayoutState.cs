@@ -67,11 +67,13 @@ internal static class ModMenuLayoutState
         int scaledPreferredHeight = ScalePreferred(preferredHeight);
         int scaledMinWidth = ScaleMinimum(minWidth, absoluteMinWidth);
         int scaledMinHeight = ScaleMinimum(minHeight, absoluteMinHeight);
-        int maxWidth = Math.Max(scaledMinWidth, Game1.uiViewport.Width - ViewportMargin * 2);
-        int maxHeight = Math.Max(scaledMinHeight, Game1.uiViewport.Height - ViewportMargin * 2);
+        int maxWidth = Math.Max(1, Game1.uiViewport.Width - ViewportMargin * 2);
+        int maxHeight = Math.Max(1, Game1.uiViewport.Height - ViewportMargin * 2);
+        int effectiveMinWidth = Math.Min(scaledMinWidth, maxWidth);
+        int effectiveMinHeight = Math.Min(scaledMinHeight, maxHeight);
         return (
-            Math.Clamp(scaledPreferredWidth, scaledMinWidth, maxWidth),
-            Math.Clamp(scaledPreferredHeight, scaledMinHeight, maxHeight));
+            Math.Clamp(scaledPreferredWidth, effectiveMinWidth, maxWidth),
+            Math.Clamp(scaledPreferredHeight, effectiveMinHeight, maxHeight));
     }
 
     public static void Resize(IClickableMenu menu, int preferredWidth, int preferredHeight, int minWidth, int minHeight)

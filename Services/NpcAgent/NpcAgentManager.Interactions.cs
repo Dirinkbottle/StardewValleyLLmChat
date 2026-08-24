@@ -44,7 +44,10 @@ internal sealed partial class NpcAgentManager
         }
 
         NpcAgentSettings settings = this.GetSettings(npc.Name);
-        if (!settings.Enabled || !this.IsWithinActiveWindow(settings))
+        if (!settings.Enabled ||
+            !settings.AllowSpeech ||
+            !this.IsProviderUsable(settings) ||
+            !this.IsWithinActiveWindow(settings))
         {
             return false;
         }

@@ -169,6 +169,8 @@ internal sealed partial class NpcAgentManager
             PendingImmediateFeedbackCount = state.Queues.PendingImmediateFeedbackCount,
             PendingRealtimeActionCount = state.Queues.PendingRealtimeActionCount,
             PendingDeferredActionCount = state.Queues.PendingDeferredActionCount,
+            DroppedPendingEventCount = state.DroppedPendingEventCount,
+            LastDroppedEventType = state.LastDroppedEventType,
             ActiveActionSummary = state.ActiveActionSummary,
             HasActiveChatBubble = state.ActiveChatBubble is not null
         };

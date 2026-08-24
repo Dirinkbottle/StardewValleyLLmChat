@@ -78,6 +78,26 @@ internal static class MenuDrawHelper
         DrawButtonBackground(spriteBatch, button.Bounds, selected, accent);
         DrawCardBadge(spriteBatch, button);
 
+        int requiredHeight = 18
+            + MeasureWrappedHeight(Game1.smallFont, button.Title, textWidth)
+            + 8
+            + MeasureWrappedHeight(Game1.smallFont, button.Description, textWidth)
+            + 18;
+        if (!string.IsNullOrWhiteSpace(button.Footer))
+        {
+            requiredHeight += 8 + MeasureWrappedHeight(Game1.smallFont, button.Footer, textWidth);
+        }
+
+        if (requiredHeight > button.Bounds.Height)
+        {
+            int titleHeight = MeasureWrappedHeight(Game1.smallFont, button.Title, textWidth);
+            Vector2 compactTextPosition = new(
+                button.Bounds.X + CardPadding,
+                button.Bounds.Y + Math.Max(6, (button.Bounds.Height - titleHeight) / 2f));
+            DrawWrappedText(spriteBatch, Game1.smallFont, button.Title, compactTextPosition, titleColor, textWidth);
+            return;
+        }
+
         Vector2 textPosition = new(button.Bounds.X + CardPadding, button.Bounds.Y + 18);
         textPosition.Y += DrawWrappedText(spriteBatch, Game1.smallFont, button.Title, textPosition, titleColor, textWidth);
         textPosition.Y += 8f;

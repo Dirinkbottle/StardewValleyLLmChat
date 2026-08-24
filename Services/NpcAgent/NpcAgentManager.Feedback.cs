@@ -10,7 +10,7 @@ internal sealed partial class NpcAgentManager
 
     private bool PublishImmediateFeedbackEvent(NpcAgentRuntimeState state, NpcImmediateFeedbackEvent feedbackEvent)
     {
-        if (string.IsNullOrWhiteSpace(feedbackEvent.RequestId))
+        if (!state.AcceptingAsyncFeedback || string.IsNullOrWhiteSpace(feedbackEvent.RequestId))
         {
             return false;
         }
@@ -61,6 +61,40 @@ internal sealed partial class NpcAgentManager
         {
             this.RouteCommittedActionRequest(npcName, state, feedbackEvent.Action, fromImmediateFeedback: true, feedbackEvent.SourceToolName, prepend: false);
         }
+    }
+
+    private void FlushImmediateFeedbackForCompletedRequest(
+        string npcName,
+        NpcAgentRuntimeState state,
+        NpcActiveRequestRuntime activeRequest)
+    {
+        List<NpcImmediateFeedbackEvent> feedbackEvents = state.Queues.ExtractImmediateFeedbackForRequest(activeRequest.RequestId);
+        if (feedbackEvents.Count == 0)
+        {
+            return;
+        }
+
+        bool prepend = activeRequest.Phase == NpcRequestPhase.Cancelling;
+        if (prepend)
+        {
+            for (int i = feedbackEvents.Count - 1; i >= 0; i--)
+            {
+                NpcImmediateFeedbackEvent feedbackEvent = feedbackEvents[i];
+                this.RouteCommittedActionRequest(npcName, state, feedbackEvent.Action, fromImmediateFeedback: true, feedbackEvent.SourceToolName, prepend: true);
+            }
+        }
+        else
+        {
+            foreach (NpcImmediateFeedbackEvent feedbackEvent in feedbackEvents)
+            {
+                this.RouteCommittedActionRequest(npcName, state, feedbackEvent.Action, fromImmediateFeedback: true, feedbackEvent.SourceToolName, prepend: false);
+            }
+        }
+
+        this.logger.Debug(
+            "Feedback",
+            $"请求结束前提交剩余即时反馈 count={feedbackEvents.Count} request={activeRequest.RequestId} prepend={prepend}",
+            npcName);
     }
 
     private bool ShouldAcceptImmediateFeedback(NpcAgentRuntimeState state, NpcImmediateFeedbackEvent feedbackEvent)
